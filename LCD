@@ -11,7 +11,7 @@ LCD_D7 = OutputDevice(0)
 
 # Define Buttons
 button_mode = Button(21, pull_up=False)  # Button to change mode
-button_confirm = Button(27, pull_up=False)  # Button to confirm selection
+button_confirm = Button(21, pull_up=False)  # Button to confirm selection
 
 # Define LCD parameters
 LCD_WIDTH = 16
