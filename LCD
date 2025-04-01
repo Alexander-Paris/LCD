@@ -2,15 +2,16 @@ from gpiozero import OutputDevice, Button
 from time import sleep
 
 # Define GPIO for LCD
-LCD_RS = OutputDevice(26)
-LCD_E = OutputDevice(19)
-LCD_D4 = OutputDevice(13)
-LCD_D5 = OutputDevice(6)
-LCD_D6 = OutputDevice(5)
-LCD_D7 = OutputDevice(0)
+LCD_RS = OutputDevice(25)
+LCD_E = OutputDevice(24)
+LCD_D4 = OutputDevice(23)
+LCD_D5 = OutputDevice(18)
+LCD_D6 = OutputDevice(15)
+LCD_D7 = OutputDevice(14)
 
-# Define Button for Mode Change
-button = Button(17)  # GPIO 17 for button input
+# Define Buttons
+button_mode = Button(17, pull_up=False)  # Button to change mode
+button_confirm = Button(27, pull_up=False)  # Button to confirm selection
 
 # Define LCD parameters
 LCD_WIDTH = 16
@@ -26,6 +27,7 @@ E_DELAY = 0.001
 # Sorting modes
 modes = ["Value", "Mint", "Year"]
 mode_index = 0  # Start with "Value" mode
+confirmed = False  # Track confirmation state
 
 def lcd_init():
     """Initialize the LCD display."""
@@ -75,18 +77,30 @@ def lcd_string(message, line):
 
 def change_mode():
     """Change sorting mode on button press."""
-    global mode_index
+    global mode_index, confirmed
     mode_index = (mode_index + 1) % len(modes)  # Cycle through modes
+    confirmed = False  # Reset confirmation
+    lcd_update()
+
+def confirm_mode():
+    """Confirm the selected mode and update display."""
+    global confirmed
+    confirmed = True
     lcd_update()
 
 def lcd_update():
-    """Update the LCD display with the current mode."""
+    """Update the LCD display based on selection state."""
     lcd_byte(0x01, LCD_CMD)  # Clear display
-    lcd_string("Sorting Mode:", LCD_LINE_1)
-    lcd_string(modes[mode_index], LCD_LINE_2)
+    if confirmed:
+        lcd_string(modes[mode_index], LCD_LINE_1)
+        lcd_string("Insert Coin", LCD_LINE_2)
+    else:
+        lcd_string("Sorting Mode:", LCD_LINE_1)
+        lcd_string(modes[mode_index], LCD_LINE_2)
 
-# Attach button press event
-button.when_pressed = change_mode
+# Attach button press events
+button_mode.when_pressed = change_mode
+button_confirm.when_pressed = confirm_mode
 
 # Main program
 if __name__ == '__main__':
