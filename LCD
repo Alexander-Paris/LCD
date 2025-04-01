@@ -2,15 +2,15 @@ from gpiozero import OutputDevice, Button
 from time import sleep
 
 # Define GPIO for LCD
-LCD_RS = OutputDevice(25)
-LCD_E = OutputDevice(24)
-LCD_D4 = OutputDevice(23)
-LCD_D5 = OutputDevice(18)
-LCD_D6 = OutputDevice(15)
-LCD_D7 = OutputDevice(14)
+LCD_RS = OutputDevice(26)
+LCD_E = OutputDevice(19)
+LCD_D4 = OutputDevice(13)
+LCD_D5 = OutputDevice(6)
+LCD_D6 = OutputDevice(5)
+LCD_D7 = OutputDevice(0)
 
 # Define Buttons
-button_mode = Button(17, pull_up=False)  # Button to change mode
+button_mode = Button(21, pull_up=False)  # Button to change mode
 button_confirm = Button(27, pull_up=False)  # Button to confirm selection
 
 # Define LCD parameters
