@@ -2,14 +2,14 @@ from RPLCD.i2c import CharLCD
 from gpiozero import Button
 from time import sleep
 
-# Initialize LCD using I2C
-lcd = CharLCD('PCF8574', 0x27)  # Use 0x3F if your module has a different address
+# LCD Setup (change address if different)
+lcd = CharLCD('PCF8574', 0x27)  # Use 0x3F or whatever your I2C address is
 
-# Define Buttons
-button_mode = Button(17, pull_up=False)
-button_confirm = Button(27, pull_up=False)
+# Updated GPIO Pins for Buttons
+button_mode = Button(26, pull_up=True)
+button_confirm = Button(19, pull_up=True)
 
-# Sorting Modes
+# Mode logic
 modes = ["Value", "Mint", "Year"]
 mode_index = 0
 confirmed = False
@@ -25,17 +25,16 @@ def lcd_update():
         lcd.crlf()
         lcd.write_string(modes[mode_index].ljust(16))
 
-# Main loop
 lcd_update()
+
 while True:
     if button_mode.is_pressed:
         mode_index = (mode_index + 1) % len(modes)
         confirmed = False
         lcd_update()
-        sleep(0.3)
+        sleep(0.3)  # Debounce delay
 
     if button_confirm.is_pressed:
         confirmed = True
         lcd_update()
         sleep(0.3)
-
