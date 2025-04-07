@@ -1,40 +1,197 @@
-from RPLCD.i2c import CharLCD
+import cv2
+import numpy as np
+from gpiozero import OutputDevice
 from gpiozero import Button
+from RPLCD.i2c import CharLCD
+import RPi.GPIO as GPIO
 from time import sleep
+import time
+import cvzone
 
-# LCD Setup (change address if different)
-lcd = CharLCD('PCF8574', 0x27)  # Use 0x3F or whatever your I2C address is
+# --------- Setup ---------
+# Camera
+cap = cv2.VideoCapture(0)
+cap.set(3, 640)
+cap.set(4, 480)
 
-# Updated GPIO Pins for Buttons
-button_mode = Button(26, pull_up=True)
-button_confirm = Button(19, pull_up=True)
+# LCD via I2C
+lcd = CharLCD('PCF8574', 0x27)
 
-# Mode logic
+# Buttons
+mode_button = Button(26, pull_up=True)
+confirm_button = Button(19, pull_up=True)
+
+# GPIO setup for RPi.GPIO
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(19, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+# Modes
 modes = ["Value", "Mint", "Year"]
-mode_index = 0
-confirmed = False
+current_mode = 0
+selected_mode_active = False
+totalMoney = 0
+
+# Stepper motor via GPIOZero (can be expanded to 4-wire)
+STEP_PIN = OutputDevice(18)
+DIR_PIN = OutputDevice(23)
+
+# Optional: 4-step sequence motor
+IN1 = OutputDevice(17)
+IN2 = OutputDevice(27)
+IN3 = OutputDevice(24)
+IN4 = OutputDevice(25)
+
+# Step values for coin sorting
+coin_position_steps = {
+    "penny": 0,
+    "nickel": 40,
+    "dime": 80,
+    "quarter": 120,
+    "nonvalid coin": 160
+}
+
+# --------- Functions ---------
+
+def empty(a): pass
+
+def preProcessing(img):
+    imgPre = cv2.GaussianBlur(img, (5,5), 3)
+    thresh1 = cv2.getTrackbarPos("Threshold1", "Settings")
+    thresh2 = cv2.getTrackbarPos("Threshold2", "Settings")
+    imgPre = cv2.Canny(imgPre, thresh1, thresh2)
+    kernel = np.ones((2,2), np.uint8)
+    imgPre = cv2.dilate(imgPre, kernel, iterations=1)
+    imgPre = cv2.morphologyEx(imgPre, cv2.MORPH_CLOSE, kernel)
+    return imgPre
+
+def step_motor(steps, delay=0.005):
+    for _ in range(steps):
+        STEP_PIN.on()
+        time.sleep(delay)
+        STEP_PIN.off()
+        time.sleep(delay)
 
 def lcd_update():
     lcd.clear()
-    if confirmed:
-        lcd.write_string(modes[mode_index].ljust(16))
+    if selected_mode_active:
+        lcd.write_string(modes[current_mode].ljust(16))
         lcd.crlf()
         lcd.write_string("Insert Coin".ljust(16))
     else:
         lcd.write_string("Sorting Mode:".ljust(16))
         lcd.crlf()
-        lcd.write_string(modes[mode_index].ljust(16))
+        lcd.write_string(modes[current_mode].ljust(16))
+
+# --------- Sorting Functions ---------
+
+def sort_by_value():
+    global totalMoney
+    while selected_mode_active:
+        success, img = cap.read()
+        if not success:
+            continue
+
+        imgPre = preProcessing(img)
+        imgContours, conFound = cvzone.findContours(img, imgPre, minArea=20)
+
+        if conFound:
+            for contour in conFound:
+                peri = cv2.arcLength(contour['cnt'], True)
+                approx = cv2.approxPolyDP(contour['cnt'], 0.02 * peri, True)
+
+                if len(approx) > 5:
+                    area = contour['area']
+                    print(f"Contour area: {area}")
+
+                    if 1500 < area < 1700:
+                        totalMoney = 10
+                    elif 1710 < area < 1900:
+                        totalMoney = 1
+                    elif 2000 < area < 2500:
+                        totalMoney = 5
+                    elif 2600 < area < 3200:
+                        totalMoney = 25
+                    else:
+                        totalMoney = 0
+
+        if totalMoney == 1:
+            value = "penny"
+        elif totalMoney == 5:
+            value = "nickel"
+        elif totalMoney == 10:
+            value = "dime"
+        elif totalMoney == 25:
+            value = "quarter"
+        else:
+            value = "nonvalid coin"
+
+        print(f"Coin detected as: {value}")
+        lcd.clear()
+        lcd.write_string(f"Detected: {value}")
+        lcd.crlf()
+        lcd.write_string("Sorting...")
+
+        if value in coin_position_steps:
+            steps = coin_position_steps[value]
+            step_motor(steps)
+
+        sleep(3)
+        lcd_update()
+
+def sort_by_mint():
+    print("Sorting by Mint (placeholder)")
+    lcd.clear()
+    lcd.write_string("Sorting by Mint")
+    step_motor(60)
+    sleep(3)
+    lcd_update()
+
+def sort_by_year():
+    print("Sorting by Year (placeholder)")
+    lcd.clear()
+    lcd.write_string("Sorting by Year")
+    step_motor(100)
+    sleep(3)
+    lcd_update()
+
+# --------- Button Callbacks ---------
+
+def mode_button_callback():
+    global current_mode
+    if not selected_mode_active:
+        current_mode = (current_mode + 1) % len(modes)
+        lcd_update()
+        print(f"Mode changed to: {modes[current_mode]}")
+
+def confirm_button_callback():
+    global selected_mode_active
+    selected_mode_active = True
+    lcd_update()
+    selected_mode = modes[current_mode]
+    print(f"Confirmed mode: {selected_mode}")
+
+    if selected_mode == "Value":
+        sort_by_value()
+    elif selected_mode == "Mint":
+        sort_by_mint()
+    elif selected_mode == "Year":
+        sort_by_year()
+
+# --------- Main Setup ---------
+
+cv2.namedWindow("Settings")
+cv2.resizeWindow("Settings", 640, 240)
+cv2.createTrackbar("Threshold1", "Settings", 117, 255, empty)
+cv2.createTrackbar("Threshold2", "Settings", 255, 255, empty)
 
 lcd_update()
 
+# Main loop to check buttons
 while True:
-    if button_mode.is_pressed:
-        mode_index = (mode_index + 1) % len(modes)
-        confirmed = False
-        lcd_update()
-        sleep(0.3)  # Debounce delay
-
-    if button_confirm.is_pressed:
-        confirmed = True
-        lcd_update()
+    if mode_button.is_pressed:
+        mode_button_callback()
+        sleep(0.3)
+    if confirm_button.is_pressed:
+        confirm_button_callback()
         sleep(0.3)
