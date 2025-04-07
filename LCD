@@ -1,111 +1,41 @@
-from gpiozero import OutputDevice, Button
+from RPLCD.i2c import CharLCD
+from gpiozero import Button
 from time import sleep
 
-# Define GPIO for LCD
-LCD_RS = OutputDevice(26)
-LCD_E = OutputDevice(19)
-LCD_D4 = OutputDevice(13)
-LCD_D5 = OutputDevice(6)
-LCD_D6 = OutputDevice(5)
-LCD_D7 = OutputDevice(0)
+# Initialize LCD using I2C
+lcd = CharLCD('PCF8574', 0x27)  # Use 0x3F if your module has a different address
 
 # Define Buttons
-button_mode = Button(21, pull_up=False)  # Button to change mode
-button_confirm = Button(21, pull_up=False)  # Button to confirm selection
+button_mode = Button(17, pull_up=False)
+button_confirm = Button(27, pull_up=False)
 
-# Define LCD parameters
-LCD_WIDTH = 16
-LCD_CHR = True
-LCD_CMD = False
-LCD_LINE_1 = 0x80
-LCD_LINE_2 = 0xC0
-
-# Timing constants
-E_PULSE = 0.001
-E_DELAY = 0.001
-
-# Sorting modes
+# Sorting Modes
 modes = ["Value", "Mint", "Year"]
-mode_index = 0  # Start with "Value" mode
-confirmed = False  # Track confirmation state
-
-def lcd_init():
-    """Initialize the LCD display."""
-    lcd_byte(0x33, LCD_CMD)
-    lcd_byte(0x32, LCD_CMD)
-    lcd_byte(0x28, LCD_CMD)
-    lcd_byte(0x0C, LCD_CMD)
-    lcd_byte(0x06, LCD_CMD)
-    lcd_byte(0x01, LCD_CMD)
-    sleep(0.002)
-
-def lcd_byte(bits, mode):
-    """Send byte to data pins."""
-    LCD_RS.value = mode
-
-    # High bits
-    LCD_D4.value = bool(bits & 0x10)
-    LCD_D5.value = bool(bits & 0x20)
-    LCD_D6.value = bool(bits & 0x40)
-    LCD_D7.value = bool(bits & 0x80)
-
-    lcd_toggle_enable()
-
-    # Low bits
-    LCD_D4.value = bool(bits & 0x01)
-    LCD_D5.value = bool(bits & 0x02)
-    LCD_D6.value = bool(bits & 0x04)
-    LCD_D7.value = bool(bits & 0x08)
-
-    lcd_toggle_enable()
-
-def lcd_toggle_enable():
-    """Toggle enable pin."""
-    sleep(E_DELAY)
-    LCD_E.on()
-    sleep(E_PULSE)
-    LCD_E.off()
-    sleep(E_DELAY)
-
-def lcd_string(message, line):
-    """Send string to display."""
-    message = message.ljust(LCD_WIDTH, " ")
-    lcd_byte(line, LCD_CMD)
-
-    for i in range(LCD_WIDTH):
-        lcd_byte(ord(message[i]), LCD_CHR)
-
-def change_mode():
-    """Change sorting mode on button press."""
-    global mode_index, confirmed
-    mode_index = (mode_index + 1) % len(modes)  # Cycle through modes
-    confirmed = False  # Reset confirmation
-    lcd_update()
-
-def confirm_mode():
-    """Confirm the selected mode and update display."""
-    global confirmed
-    confirmed = True
-    lcd_update()
+mode_index = 0
+confirmed = False
 
 def lcd_update():
-    """Update the LCD display based on selection state."""
-    lcd_byte(0x01, LCD_CMD)  # Clear display
+    lcd.clear()
     if confirmed:
-        lcd_string(modes[mode_index], LCD_LINE_1)
-        lcd_string("Insert Coin", LCD_LINE_2)
+        lcd.write_string(modes[mode_index].ljust(16))
+        lcd.crlf()
+        lcd.write_string("Insert Coin".ljust(16))
     else:
-        lcd_string("Sorting Mode:", LCD_LINE_1)
-        lcd_string(modes[mode_index], LCD_LINE_2)
+        lcd.write_string("Sorting Mode:".ljust(16))
+        lcd.crlf()
+        lcd.write_string(modes[mode_index].ljust(16))
 
-# Attach button press events
-button_mode.when_pressed = change_mode
-button_confirm.when_pressed = confirm_mode
+# Main loop
+lcd_update()
+while True:
+    if button_mode.is_pressed:
+        mode_index = (mode_index + 1) % len(modes)
+        confirmed = False
+        lcd_update()
+        sleep(0.3)
 
-# Main program
-if __name__ == '__main__':
-    lcd_init()
-    lcd_update()  # Display initial mode
+    if button_confirm.is_pressed:
+        confirmed = True
+        lcd_update()
+        sleep(0.3)
 
-    while True:
-        sleep(0.1)  # Small delay to reduce CPU usage
