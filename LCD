@@ -21,10 +21,7 @@ lcd = CharLCD('PCF8574', 0x27)
 mode_button = Button(26, pull_up=True)
 confirm_button = Button(19, pull_up=True)
 
-# GPIO setup for RPi.GPIO
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(19, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
 
 # Modes
 modes = ["Value", "Mint", "Year"]
